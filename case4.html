@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>重力球 Pong</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      touch-action: none;
+      background-color: #000;
+      font-family: 'Arial Rounded MT Bold', 'Helvetica Rounded', Arial, sans-serif;
+    }
+
+    #game-container {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: radial-gradient(circle at center, #111, #000);
+      overflow: hidden;
+    }
+
+    #ball {
+      position: absolute;
+      width: 20px;
+      height: 20px;
+      background: linear-gradient(135deg, #ff0055, #ff9900);
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+      box-shadow: 0 0 10px #ff0055, 0 0 20px #ff9900;
+      z-index: 2;
+    }
+
+    #paddle {
+      position: absolute;
+      bottom: max(8vh, env(safe-area-inset-bottom, 0px) + 10px);
+      left: 50%;
+      width: 15vw;
+      min-width: 80px;
+      height: 3vh;
+      min-height: 15px;
+      background: linear-gradient(90deg, #00ff00, #00cc00);
+      border-radius: 6px;
+      transform: translateX(-50%);
+      box-shadow: 0 0 10px #00ff00;
+      z-index: 3;
+    }
+
+    #score {
+      position: absolute;
+      top: 2vh;
+      left: 2vw;
+      color: white;
+      font-size: 4vw;
+      font-weight: bold;
+      z-index: 5;
+      text-shadow: 0 0 5px #00ff00;
+    }
+
+    .particle {
+      position: absolute;
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background-color: #ff0055;
+      z-index: 1;
+      pointer-events: none;
+    }
+
+    #start-screen, #game-over, #permission-screen {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: radial-gradient(circle at center, rgba(20, 20, 40, 0.9), rgba(0, 0, 0, 0.95));
+      color: white;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      z-index: 10;
+      backdrop-filter: blur(5px);
+    }
+
+    #permission-screen {
+      display: none;
+    }
+
+    #start-screen h1, #game-over h2, #permission-screen h2 {
+      font-size: 8vw;
+      margin-bottom: 4vh;
+      color: #00ff00;
+      text-shadow: 0 0 10px #00ff00;
+    }
+
+    #start-screen h2 {
+      font-size: 5vw;
+      margin-bottom: 2vh;
+      color: #ff9900;
+    }
+
+    #start-screen p, #game-over p, #permission-screen p {
+      font-size: 4vw;
+      margin: 10px 0;
+      max-width: 80%;
+      line-height: 1.5;
+    }
+
+    .instructions {
+      background: rgba(0, 50, 50, 0.5);
+      padding: 15px;
+      border-radius: 15px;
+      margin: 15px 0;
+      border: 1px solid #00ff00;
+      max-width: 90%;
+    }
+
+    button {
+      margin-top: 20px;
+      padding: 12px 24px;
+      font-size: 18px;
+      background: linear-gradient(135deg, #00ff00, #00cc00);
+      color: black;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: bold;
+      box-shadow: 0 0 10px #00ff00;
+      transition: all 0.2s ease;
+    }
+
+    button:active {
+      transform: scale(0.95);
+      background: linear-gradient(135deg, #00cc00, #009900);
+    }
+
+    .btn-group {
+      display: flex;
+      gap: 15px;
+      margin-top: 20px;
+    }
+
+    .pulse {
+      animation: pulse 1.5s infinite;
+    }
+
+    @keyframes pulse {
+      0% { transform: scale(1); box-shadow: 0 0 10px #00ff00; }
+      50% { transform: scale(1.05); box-shadow: 0 0 20px #00ff00; }
+      100% { transform: scale(1); box-shadow: 0 0 10px #00ff00; }
+    }
+
+    .permission-icon {
+      font-size: 60px;
+      margin: 20px 0;
+      animation: spin 4s linear infinite;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <div id="game-container">
+    <div id="ball"></div>
+    <div id="paddle"></div>
+    <div id="score">得分: 0</div>
+
+    <div id="start-screen">
+      <h1>重力球 Pong</h1>
+      <h2>倾斜手机控制挡板</h2>
+      <div class="instructions">
+        <p>⚡ 点击开始并允许陀螺仪权限</p>
+        <p>🎮 倾斜手机控制挡板左右移动</p>
+        <p>🏆 尽可能长时间接住球</p>
+      </div>
+      <button id="start-btn" class="pulse">开始游戏</button>
+    </div>
+
+    <div id="game-over">
+      <h2>游戏结束</h2>
+      <p>得分: <span id="final-score">0</span></p>
+      <button id="restart-btn">重新开始</button>
+    </div>
+
+    <div id="permission-screen">
+      <div class="permission-icon">🎮</div>
+      <h2>需要陀螺仪权限</h2>
+      <p>请允许使用设备方向传感器</p>
+      <p>才能开始游戏</p>
+      <div class="btn-group">
+        <button id="grant-btn">允许权限</button>
+        <button id="deny-btn">取消</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const gameContainer = document.getElementById('game-container');
+    const ball = document.getElementById('ball');
+    const paddle = document.getElementById('paddle');
+    const scoreElement = document.getElementById('score');
+    const startScreen = document.getElementById('start-screen');
+    const startBtn = document.getElementById('start-btn');
+    const gameOverScreen = document.getElementById('game-over');
+    const restartBtn = document.getElementById('restart-btn');
+    const finalScore = document.getElementById('final-score');
+    const permissionScreen = document.getElementById('permission-screen');
+    const grantBtn = document.getElementById('grant-btn');
+    const denyBtn = document.getElementById('deny-btn');
+
+    let ballX, ballY;
+    let ballSpeedX, ballSpeedY;
+    let paddleX;
+    let score = 0;
+    let gameActive = false;
+    let animationId;
+    let lastTime = 0;
+
+    // ======= 重力控制状态与参数（可按手感继续微调）=======
+    let rawTilt = 0;
+    let filteredTiltX = 0;
+    let tiltBias = 0;
+    let calibrated = false;
+    let calibrationSamples = [];
+    const CALIBRATION_SAMPLES = 8;
+
+    const SMOOTHING = 0.08;
+    const DEAD_ZONE = 0.8;
+    const MAX_TILT = 25;
+    const ACCEL_TIME = 0.08;
+    const MAX_SPEED_FACTOR = 1.6;
+    const DRAG = 3.5;
+
+    let paddleVelX = 0;
+    let containerWidth, containerHeight;
+    let particles = [];
+    let permissionRequested = false;
+
+    function updateDimensions() {
+      containerWidth = gameContainer.clientWidth;
+      containerHeight = gameContainer.clientHeight;
+    }
+
+    window.addEventListener('resize', updateDimensions);
+    updateDimensions();
+
+    function handleOrientation(event) {
+      if (event.gamma === null || event.gamma === undefined) return;
+      rawTilt = event.gamma;
+      if (!calibrated) {
+        calibrationSamples.push(rawTilt);
+        if (calibrationSamples.length >= CALIBRATION_SAMPLES) {
+          tiltBias = calibrationSamples.reduce((a,b) => a + b, 0) / calibrationSamples.length;
+          calibrated = true;
+          filteredTiltX = 0;
+        }
+        return;
+      }
+      let tilt = rawTilt - tiltBias;
+      if (Math.abs(tilt) < DEAD_ZONE) tilt = 0;
+      filteredTiltX = filteredTiltX * (1 - SMOOTHING) + tilt * SMOOTHING;
+    }
+
+    function startGame() {
+      updateDimensions();
+      ballX = containerWidth / 2;
+      ballY = containerHeight / 2;
+      ballSpeedX = 4 * (Math.random() > 0.5 ? 1 : -1);
+      ballSpeedY = 225;
+      paddleX = containerWidth / 2;
+      paddleVelX = 0;
+      score = 0;
+      gameActive = true;
+      startScreen.style.display = 'none';
+      gameOverScreen.style.display = 'none';
+      permissionScreen.style.display = 'none';
+      scoreElement.innerText = `得分: ${score}`;
+
+      calibrated = false;
+      calibrationSamples = [];
+      tiltBias = 0;
+      filteredTiltX = 0;
+      rawTilt = 0;
+
+      lastTime = performance.now();
+      animationId = requestAnimationFrame(gameLoop);
+    }
+
+    function createParticles(x, y, count) {
+      for (let i = 0; i < count; i++) {
+        const particle = document.createElement('div');
+        particle.className = 'particle';
+        particle.style.left = `${x}px`;
+        particle.style.top = `${y}px`;
+        gameContainer.appendChild(particle);
+        
+        const angle = Math.random() * Math.PI * 2;
+        const speed = 1 + Math.random() * 3;
+        const size = 2 + Math.random() * 4;
+        particle.style.width = `${size}px`;
+        particle.style.height = `${size}px`;
+        
+        particles.push({
+          element: particle,
+          x,
+          y,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed,
+          life: 30 + Math.random() * 30
+        });
+      }
+    }
+
+    function updateParticles() {
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.x += p.vx;
+        p.y += p.vy;
+        p.life--;
+        p.element.style.left = `${p.x}px`;
+        p.element.style.top = `${p.y}px`;
+        p.element.style.opacity = p.life / 60;
+        if (p.life <= 0) {
+          gameContainer.removeChild(p.element);
+          particles.splice(i, 1);
+        }
+      }
+    }
+
+    function gameLoop(timestamp) {
+      if (!gameActive) return;
+
+      let dt = (timestamp - lastTime) / 1000;
+      lastTime = timestamp;
+      if (dt > 0.05) dt = 0.05;
+
+      ballX += ballSpeedX * dt * 60 / (60/1);
+      ballY += ballSpeedY * dt * 60 / (60/1);
+
+      if (ballX <= 10 || ballX >= containerWidth - 10) {
+        ballSpeedX = -ballSpeedX;
+        createParticles(ballX, ballY, 8);
+      }
+      if (ballY <= 10) {
+        ballSpeedY = -ballSpeedY;
+        createParticles(ballX, ballY, 8);
+      }
+
+      const maxVel = containerWidth * MAX_SPEED_FACTOR;
+      const tiltForCalc = filteredTiltX;
+      let t = tiltForCalc / MAX_TILT;
+      if (t > 1) t = 1;
+      if (t < -1) t = -1;
+      const targetVel = t * maxVel;
+
+      const accel = (targetVel - paddleVelX) / Math.max(ACCEL_TIME, 0.001);
+      paddleVelX += accel * dt;
+      paddleVelX -= paddleVelX * DRAG * dt;
+      if (paddleVelX > maxVel) paddleVelX = maxVel;
+      if (paddleVelX < -maxVel) paddleVelX = -maxVel;
+
+      paddleX += paddleVelX * dt;
+      paddleX = Math.max(paddle.offsetWidth / 2, Math.min(containerWidth - paddle.offsetWidth / 2, paddleX));
+
+      // ======= 碰撞检测 (已修改) =======
+      // 获取挡板和球的精确边界
+      const paddleRect = {
+        left: paddleX - paddle.offsetWidth / 2,
+        right: paddleX + paddle.offsetWidth / 2,
+        top: paddle.offsetTop,
+        bottom: paddle.offsetTop + paddle.offsetHeight
+      };
+      const ballRadius = ball.offsetWidth / 2;
+
+      // 使用更精确的边界框(Bounding Box)进行碰撞检测
+      // 1. 球正在向下运动
+      // 2. 球的底部已经接触或越过挡板的顶部
+      // 3. 球的顶部仍在挡板的底部之上 (防止从下方穿过)
+      // 4. 球的左右边界与挡板的左右边界有重叠
+      if (
+        ballSpeedY > 0 &&
+        (ballY + ballRadius) >= paddleRect.top &&
+        (ballY - ballRadius) < paddleRect.bottom &&
+        (ballX + ballRadius) > paddleRect.left &&
+        (ballX - ballRadius) < paddleRect.right
+      ) {
+        // --- 碰撞反应 ---
+        
+        // 1. 计算撞击点位置 (-1.0 到 1.0)
+        //    撞击点越靠近挡板中心，反弹角度越垂直
+        //    撞击点越靠近挡板边缘，反弹角度越倾斜
+        const hitPos = (ballX - paddleX) / (paddle.offsetWidth / 2);
+        
+        // 2. 根据撞击点更新球的水平速度
+        ballSpeedX = hitPos * 10; // 乘以一个较大的系数(如10)可以使角度变化更明显
+
+        // 3. 反转球的垂直速度，并略微增加速度使游戏更具挑战性
+        ballSpeedY = -Math.abs(ballSpeedY) * 1.03; // 速度增益可以微调
+
+        // 4. [重要] 修正球的位置，防止"陷入"挡板
+        //    将球的位置立即重置到挡板的顶部，避免在下一帧中再次检测到碰撞
+        ballY = paddleRect.top - ballRadius;
+
+        // 5. 更新分数并创建粒子效果
+        score++;
+        scoreElement.innerText = `得分: ${score}`;
+        createParticles(ballX, ballY + ballRadius, 15); // 在实际碰撞点创建粒子
+      }
+
+
+      if (ballY > containerHeight + 20) {
+        gameOver();
+        return;
+      }
+
+      ball.style.left = `${ballX}px`;
+      ball.style.top = `${ballY}px`;
+      paddle.style.left = `${paddleX}px`;
+
+      updateParticles();
+      animationId = requestAnimationFrame(gameLoop);
+    }
+
+    function gameOver() {
+      gameActive = false;
+      cancelAnimationFrame(animationId);
+      finalScore.innerText = score;
+      gameOverScreen.style.display = 'flex';
+    }
+
+    function requestPermission() {
+      permissionRequested = true;
+      startScreen.style.display = 'none';
+      permissionScreen.style.display = 'flex';
+      
+      if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+        grantBtn.onclick = () => {
+          DeviceOrientationEvent.requestPermission()
+            .then(response => {
+              if (response === 'granted') {
+                window.addEventListener('deviceorientation', handleOrientation, { passive: true });
+                startGame();
+              } else {
+                alert('请允许陀螺仪权限才能开始游戏！');
+                permissionScreen.style.display = 'none';
+                startScreen.style.display = 'flex';
+              }
+            })
+            .catch(err => {
+              console.error('权限请求失败:', err);
+              alert('无法请求权限: ' + err.message);
+              permissionScreen.style.display = 'none';
+              startScreen.style.display = 'flex';
+            });
+        };
+        
+        denyBtn.onclick = () => {
+          permissionScreen.style.display = 'none';
+          startScreen.style.display = 'flex';
+        };
+      } else {
+        grantBtn.onclick = () => {
+          window.addEventListener('deviceorientation', handleOrientation, { passive: true });
+          startGame();
+        };
+        
+        denyBtn.onclick = () => {
+          permissionScreen.style.display = 'none';
+          startScreen.style.display = 'flex';
+        };
+      }
+    }
+
+    startBtn.addEventListener('click', requestPermission);
+    restartBtn.addEventListener('click', () => {
+      if (permissionRequested) {
+        startGame();
+      } else {
+        requestPermission();
+      }
+    });
+
+    ['touchstart', 'touchmove'].forEach(event => {
+      document.addEventListener(event, e => {
+        if (gameActive) e.preventDefault();
+      }, { passive: false });
+    });
+
+    setInterval(() => {
+      if (!gameActive && startScreen.style.display === 'flex') {
+        createParticles(
+          Math.random() * containerWidth,
+          Math.random() * containerHeight,
+          3
+        );
+      }
+    }, 500);
+  </script>
+</body>
+</html>
